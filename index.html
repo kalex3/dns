@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<title>DNS</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<main id="content">
+  <h1>DNS</h1>
+  <p>Look up a name with DNS over HTTPS. The query goes straight to the provider you pick.</p>
+  <form id="lookup">
+    <label for="name">Name</label>
+    <input id="name" name="name" type="text" placeholder="example.com…" autocomplete="off" spellcheck="false" translate="no" required>
+    <div class="row">
+      <div>
+        <label for="type">Type</label>
+        <select id="type" name="type" autocomplete="off"></select>
+      </div>
+      <div>
+        <label for="provider">Provider</label>
+        <select id="provider" name="provider" autocomplete="off"></select>
+      </div>
+    </div>
+    <div id="custom-wrap" hidden>
+      <label for="custom">Custom provider URL</label>
+      <input id="custom" name="custom" type="url" placeholder="https://dns.example/dns-query…" autocomplete="off" spellcheck="false">
+      <p class="notice">A simple GET is readable only when the response includes Access-Control-Allow-Origin.</p>
+    </div>
+    <details id="settings">
+      <summary>Settings</summary>
+      <label class="check"><input id="dnssec" name="dnssec" type="checkbox" autocomplete="off"> Disable DNSSEC verification</label>
+      <label class="check"><input id="auto-url" name="auto-url" type="checkbox" autocomplete="off"> Auto update URL</label>
+      <label class="check"><input id="whois" name="whois" type="checkbox" autocomplete="off"> Show WHOIS</label>
+      <label class="check"><input id="links" name="links" type="checkbox" autocomplete="off" checked> Link domains and IP addresses</label>
+      <label class="check"><input id="ipinfo" name="ipinfo" type="checkbox" autocomplete="off"> ipinfo.io</label>
+    </details>
+    <button id="go" type="submit">Look Up</button>
+  </form>
+  <section id="result" hidden aria-live="polite" translate="no"></section>
+</main>
+<script src="dns.js"></script>
+<script src="dnssec.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
