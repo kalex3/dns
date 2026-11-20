@@ -51,7 +51,6 @@ function linksOn() {
 }
 
 function setIpAnchor(anchor, token, link) {
-  anchor.textContent = token;
   if (!(link && reverseName(token))) return false;
   anchor.href = queryHref(token, { ...link, type: "DEFAULT" });
   anchor.target = "";
@@ -74,34 +73,44 @@ function cidrSuffix(text, end, ipv6) {
   return Number(match[1]) <= (ipv6 ? 128 : 32) ? match[0] : "";
 }
 
+function appendSoft(node, text) {
+  const parts = text.split(/([.:])/);
+  for (const part of parts) {
+    if (!part) continue;
+    node.append(part);
+    if (part === "." || part === ":") node.append(document.createElement("wbr"));
+  }
+}
+
 function appendLinked(node, text, link) {
   if (!linksOn()) {
-    node.append(text);
+    appendSoft(node, text);
     return;
   }
   let cursor = 0;
   for (const match of text.matchAll(LINK_TOKEN)) {
-    if (match.index > cursor) node.append(text.slice(cursor, match.index));
+    if (match.index > cursor) appendSoft(node, text.slice(cursor, match.index));
     const token = match[0];
     const anchor = document.createElement("a");
-    anchor.textContent = token;
     if (isIp(token)) {
       const suffix = cidrSuffix(text, match.index + token.length, token.includes(":"));
+      const shown = token + suffix;
       if (setIpAnchor(anchor, token, link)) {
-        anchor.textContent = token + suffix;
+        appendSoft(anchor, shown);
         node.append(anchor);
-      } else node.append(token + suffix);
-      cursor = match.index + token.length + suffix.length;
+      } else appendSoft(node, shown);
+      cursor = match.index + shown.length;
     } else if (link) {
+      appendSoft(anchor, token);
       anchor.href = queryHref(token, link);
       node.append(anchor);
       cursor = match.index + token.length;
     } else {
-      node.append(token);
+      appendSoft(node, token);
       cursor = match.index + token.length;
     }
   }
-  if (cursor < text.length) node.append(text.slice(cursor));
+  if (cursor < text.length) appendSoft(node, text.slice(cursor));
 }
 
 function writeLinked(node, text, link) {
@@ -120,10 +129,12 @@ function relinkResult(result) {
 
 function recordTable(records, link) {
   const table = document.createElement("table");
+  table.className = "answers";
   const head = document.createElement("tr");
-  for (const label of ["Name", "Type", "TTL", "Data"]) {
+  for (const [label, className] of [["Name", ""], ["Type", "fit"], ["TTL", "num"], ["Data", ""]]) {
     const cell = document.createElement("th");
     cell.textContent = label;
+    if (className) cell.className = className;
     head.append(cell);
   }
   table.append(head);
@@ -132,6 +143,7 @@ function recordTable(records, link) {
     const name = document.createElement("td");
     writeLinked(name, record.name, link);
     const type = document.createElement("td");
+    type.className = "fit";
     type.textContent = typeLabel(record.type);
     const ttl = document.createElement("td");
     ttl.className = "num";
@@ -406,10 +418,9 @@ function init() {
   customInput.value = localStorage.getItem("doh.custom") || "";
   dnssecInput.checked = localStorage.getItem("doh.dnssec") === "off";
   autoUrlInput.checked = localStorage.getItem("doh.autourl") === "on";
-  whoisInput.checked = localStorage.getItem("doh.whois") === "on";
+  whoisInput.checked = localStorage.getItem("doh.whois") !== "off";
   linksInput.checked = localStorage.getItem("doh.links") !== "off";
-  ipinfoInput.checked = localStorage.getItem("doh.ipinfo") === "on"
-    || (localStorage.getItem("doh.ipinfo") == null && localStorage.getItem("doh.iplink") === "ipinfo");
+  ipinfoInput.checked = localStorage.getItem("doh.ipinfo") !== "off";
   linksInput.addEventListener("change", () => {
     localStorage.setItem("doh.links", linksInput.checked ? "on" : "off");
     relinkResult(result);

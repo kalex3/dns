@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
 <title>DNS</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -35,9 +36,9 @@
       <summary>Settings</summary>
       <label class="check"><input id="dnssec" name="dnssec" type="checkbox" autocomplete="off"> Disable DNSSEC verification</label>
       <label class="check"><input id="auto-url" name="auto-url" type="checkbox" autocomplete="off"> Auto update URL</label>
-      <label class="check"><input id="whois" name="whois" type="checkbox" autocomplete="off"> Show WHOIS</label>
+      <label class="check"><input id="whois" name="whois" type="checkbox" autocomplete="off" checked> Show WHOIS</label>
       <label class="check"><input id="links" name="links" type="checkbox" autocomplete="off" checked> Link domains and IP addresses</label>
-      <label class="check"><input id="ipinfo" name="ipinfo" type="checkbox" autocomplete="off"> ipinfo.io</label>
+      <label class="check"><input id="ipinfo" name="ipinfo" type="checkbox" autocomplete="off" checked> Show ipinfo.io for IP addresses</label>
     </details>
     <button id="go" type="submit">Look Up</button>
   </form>
