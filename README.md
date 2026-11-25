@@ -23,3 +23,5 @@ A link stores the name, and the type when it is not the default. Provider, custo
 - **Show WHOIS** reads registration data from RDAP.
 - **Link domains and IP addresses** turns names and addresses in the answer into lookups. An address link uses the default type, which looks the address up as PTR.
 - **Show ipinfo.io for IP addresses** loads ipinfo.io for an address or reverse name and shows the parsed response. The heading links to the ipinfo.io page.
+
+An address the IANA special-purpose registries mark as not globally reachable, and IPv4 or IPv6 multicast, is not sent to RDAP or ipinfo.io. The result names that reservation and links the RFC. A globally reachable allocation inside one of those blocks is looked up as usual.

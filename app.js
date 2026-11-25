@@ -245,6 +245,139 @@ function whoisSubject(name) {
   return { kind: "domain", query: trimmed.toLowerCase() };
 }
 
+function ipv4Value(ip) {
+  const parts = ip.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return null;
+  return parts.reduce((value, part) => value * 256 + Number(part), 0) >>> 0;
+}
+
+function ipv6Value(ip) {
+  const halves = ip.split("::");
+  if (halves.length > 2) return null;
+  const parse = (text) => text ? text.split(":").map((part) => /^[0-9a-fA-F]{1,4}$/.test(part) ? parseInt(part, 16) : null) : [];
+  const head = parse(halves[0]);
+  const tail = halves.length === 2 ? parse(halves[1]) : [];
+  if (head.includes(null) || tail.includes(null)) return null;
+  if (halves.length === 1 && head.length !== 8) return null;
+  if (halves.length === 2 && head.length + tail.length > 7) return null;
+  const groups = halves.length === 2 ? [...head, ...Array(8 - head.length - tail.length).fill(0), ...tail] : head;
+  if (groups.length !== 8) return null;
+  return groups.reduce((value, part) => (value << 16n) + BigInt(part), 0n);
+}
+
+function reservedPrefix(cidr) {
+  const slash = cidr.lastIndexOf("/");
+  const addr = cidr.slice(0, slash);
+  const length = Number(cidr.slice(slash + 1));
+  const v6 = addr.includes(":");
+  const value = v6 ? ipv6Value(addr) : ipv4Value(addr);
+  const mask = v6
+    ? ((1n << 128n) - 1n) ^ ((1n << (128n - BigInt(length))) - 1n)
+    : (0xffffffff << (32 - length)) >>> 0;
+  return { v6, length, mask, network: v6 ? value & mask : (value & mask) >>> 0 };
+}
+
+function rfcSpec(item) {
+  if (item[0] === "errata") return { errata: item[1] };
+  return { rfc: item[0], section: item[1] || "" };
+}
+
+// A prefix with no name is allocated inside a reserved parent and stays on WHOIS.
+const RESERVED = [
+  ["0.0.0.0/8", "\"This network\"", [[791, "3.2"]]],
+  ["0.0.0.0/32", "\"This host on this network\"", [[1122, "3.2.1.3"]]],
+  ["10.0.0.0/8", "Private-Use", [[1918]]],
+  ["100.64.0.0/10", "Shared Address Space", [[6598]]],
+  ["127.0.0.0/8", "Loopback", [[1122, "3.2.1.3"]]],
+  ["169.254.0.0/16", "Link Local", [[3927]]],
+  ["172.16.0.0/12", "Private-Use", [[1918]]],
+  ["192.0.0.0/24", "IETF Protocol Assignments", [[6890, "2.1"]]],
+  ["192.0.0.0/29", "IPv4 Service Continuity Prefix", [[7335]]],
+  ["192.0.0.8/32", "IPv4 dummy address", [[7600]]],
+  ["192.0.0.9/32"],
+  ["192.0.0.10/32"],
+  ["192.0.0.170/32", "NAT64/DNS64 Discovery", [[8880], [7050, "2.2"]]],
+  ["192.0.0.171/32", "NAT64/DNS64 Discovery", [[8880], [7050, "2.2"]]],
+  ["192.0.2.0/24", "Documentation (TEST-NET-1)", [[5737]]],
+  ["192.88.99.0/24", "Deprecated (6to4 Relay Anycast)", [[7526]]],
+  ["192.88.99.2/32", "6a44-relay anycast address", [[6751]]],
+  ["192.168.0.0/16", "Private-Use", [[1918]]],
+  ["198.18.0.0/15", "Benchmarking", [[2544]]],
+  ["198.51.100.0/24", "Documentation (TEST-NET-2)", [[5737]]],
+  ["203.0.113.0/24", "Documentation (TEST-NET-3)", [[5737]]],
+  ["224.0.0.0/4", "Multicast", [[1112, "4"]]],
+  ["240.0.0.0/4", "Reserved", [[1112, "4"]]],
+  ["255.255.255.255/32", "Limited Broadcast", [[8190], [919, "7"]]],
+  ["::1/128", "Loopback Address", [[4291]]],
+  ["::/128", "Unspecified Address", [[4291]]],
+  ["::ffff:0:0/96", "IPv4-mapped Address", [[4291]]],
+  ["64:ff9b:1::/48", "IPv4-IPv6 translation", [[8215]]],
+  ["100::/64", "Discard-Only Address Block", [[6666]]],
+  ["100:0:0:1::/64", "Dummy IPv6 Prefix", [[9780]]],
+  ["2001::/23", "IETF Protocol Assignments", [[2928]]],
+  ["2001::/32"],
+  ["2001:1::1/128"],
+  ["2001:1::2/128"],
+  ["2001:1::3/128"],
+  ["2001:2::/48", "Benchmarking", [[5180], ["errata", 1752]]],
+  ["2001:3::/32"],
+  ["2001:4:112::/48"],
+  ["2001:10::/28", "Deprecated (previously ORCHID)", [[4843]]],
+  ["2001:20::/28"],
+  ["2001:30::/28"],
+  ["2001:db8::/32", "Documentation", [[3849]]],
+  ["3fff::/20", "Documentation", [[9637]]],
+  ["5f00::/16", "Segment Routing (SRv6) SIDs", [[9602]]],
+  ["fc00::/7", "Unique-Local", [[4193], [8190]]],
+  ["fe80::/10", "Link-Local Unicast", [[4291]]],
+  ["ff00::/8", "Multicast", [[4291, "2.7"]]],
+].map(([prefix, name, refs]) => ({
+  ...reservedPrefix(prefix),
+  name: name || "",
+  refs: (refs || []).map(rfcSpec),
+}));
+
+function reservedAddress(ip) {
+  const v6 = ip.includes(":");
+  const value = v6 ? ipv6Value(ip) : ipv4Value(ip);
+  if (value == null) return null;
+  let best = null;
+  for (const entry of RESERVED) {
+    if (entry.v6 !== v6 || (best && entry.length <= best.length)) continue;
+    const network = v6 ? value & entry.mask : (value & entry.mask) >>> 0;
+    if (network === entry.network) best = entry;
+  }
+  return best?.name ? best : null;
+}
+
+function rfcHref(ref) {
+  if (ref.errata) return `https://www.rfc-editor.org/errata/eid${ref.errata}`;
+  const url = `https://www.rfc-editor.org/rfc/rfc${ref.rfc}`;
+  return ref.section ? `${url}#section-${ref.section}` : url;
+}
+
+function rfcText(ref) {
+  if (ref.errata) return `RFC errata ${ref.errata}`;
+  return ref.section ? `RFC ${ref.rfc}, Section ${ref.section}` : `RFC ${ref.rfc}`;
+}
+
+function showReserved(result, entry) {
+  const heading = document.createElement("h2");
+  heading.dataset.reserved = "1";
+  heading.textContent = "Reserved";
+  const note = document.createElement("p");
+  note.dataset.reserved = "1";
+  if (entry.name === "Reserved") note.append("Reserved by ");
+  else if (entry.name.startsWith("Deprecated")) note.append(entry.name, " by ");
+  else note.append("Reserved for ", entry.name, " by ");
+  entry.refs.forEach((ref, index) => {
+    if (index > 0) note.append(index === entry.refs.length - 1 ? " and " : ", ");
+    note.append(externalLink(rfcHref(ref), rfcText(ref)));
+  });
+  note.append(".");
+  result.append(heading, note);
+}
+
 async function fetchRdap(url) {
   let response;
   try {
@@ -428,7 +561,7 @@ function init() {
   ipinfoInput.addEventListener("change", () => {
     localStorage.setItem("doh.ipinfo", ipinfoInput.checked ? "on" : "off");
     for (const node of result.querySelectorAll("[data-ipinfo]")) node.remove();
-    if (!ipinfoInput.checked || result._whoisSubject?.kind !== "ip") return;
+    if (!ipinfoInput.checked || result._reserved || result._whoisSubject?.kind !== "ip") return;
     const token = (result._ipinfoToken || 0) + 1;
     result._ipinfoToken = token;
     showIpinfo(result, result._whoisSubject.query, result._queryLink, token);
@@ -436,7 +569,7 @@ function init() {
   whoisInput.addEventListener("change", () => {
     localStorage.setItem("doh.whois", whoisInput.checked ? "on" : "off");
     for (const node of result.querySelectorAll("[data-whois]")) node.remove();
-    if (!whoisInput.checked || !result._whoisSubject) return;
+    if (!whoisInput.checked || result._reserved || !result._whoisSubject) return;
     const token = (result._whoisToken || 0) + 1;
     result._whoisToken = token;
     showWhois(result, result._whoisSubject, result._queryLink, token);
@@ -563,7 +696,13 @@ function init() {
         button.textContent = "Look Up";
       }
     }
+    if (result._lookupToken !== lookupToken) return;
     result._whoisSubject = lookedUp ? whoisSubject(lookedUp) : null;
+    result._reserved = result._whoisSubject?.kind === "ip" ? reservedAddress(result._whoisSubject.query) : null;
+    if (result._reserved) {
+      showReserved(result, result._reserved);
+      return;
+    }
     if (lookedUp && whoisInput.checked) showWhois(result, result._whoisSubject, link, whoisToken);
     if (ipinfoInput.checked && result._whoisSubject?.kind === "ip") showIpinfo(result, result._whoisSubject.query, link, lookupToken);
   });
